@@ -1,0 +1,631 @@
+<!--Copyright (c) 2013 Ryan Stemen
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Robo Throw DM</title>
+    <script type="text/javascript"><!--
+        const WIDTH = 1280;
+        const HEIGHT = 720;
+        const TILE_SIZE = 24;
+        
+        var center = new vec2(WIDTH / 2, HEIGHT / 2);
+        var context;
+        var canvas;
+        var bullets = new Array();
+        var keyboardVec = new vec2(0, 0);
+        var keyboardState = new Object();
+        var mousePosition = new vec2(0,0);
+        var mouseDown = false;
+        var counter = 0.0;
+        var killCount = 0;
+        
+        var actors = new Array();
+        var player;
+        var level;
+
+        var defaultLevel =  "########################################\n" + 
+                            "#......................................#\n" +
+                            "#......................................#\n" +
+                            "#......................................#\n" +
+                            "#......................................#\n" +
+                            "#......................................#\n" +
+                            "#......................................#\n" +
+                            "#......................................#\n" +
+                            "#............################..........#\n" +
+                            "#............#..............#..........#\n" +
+                            "#............#..............#..........#\n" +
+                            "#.......######........#.....#..........#\n" +
+                            "#.....................##########.......#\n" +
+                            "#......................................#\n" +
+                            "#......................................#\n" +
+                            "#...........P..........................#\n" +
+                            "#......................................#\n" +
+                            "########################################\n";
+        
+        window.onload = init;
+        window.onmousemove = onMouseMove;
+        window.onmousedown = onMouseDown;
+        window.onmouseup = onMouseUp;
+        window.onkeydown = onKeyDown;
+        window.onkeyup = onKeyUp;
+        
+        
+        function vec2($x, $y){
+            this.x = ($x == null) ? 0 : $x;
+            this.y = ($y == null) ? 0 : $y;
+        }
+        
+        vec2.prototype.lengthSquared = function(){
+            return this.x * this.x + this.y * this.y;
+        }
+        
+        vec2.prototype.length = function(){
+            return Math.sqrt(this.x * this.x + this.y * this.y);
+        }
+        
+        vec2.prototype.normalize = function(){
+            var length = this.length();
+            if(length == 0){
+                return new vec2(); 
+            }
+            return new vec2(this.x / length, this.y / length);
+        }
+        
+        vec2.prototype.plus = function($vec2_2){
+            return new vec2(this.x + $vec2_2.x, this.y + $vec2_2.y);
+        }
+        
+        vec2.prototype.minus = function($vec2_2){
+            return new vec2(this.x - $vec2_2.x, this.y - $vec2_2.y);
+        }
+        
+        vec2.prototype.times = function($val){
+            return new vec2(this.x * $val, this.y * $val);
+        }
+        
+        vec2.prototype.divide = function($val){
+            return new vec2(this.x / $val, this.y / $val);
+        }
+        
+        vec2.prototype.dot = function($vec2){
+            return this.x * $vec2.x + this.y * $vec2.y;
+        }
+
+        function findIntersection($pt0, $pt1, $pt2, $pt3){
+            var s1 = $pt1.minus($pt0);
+            var s2 = $pt3.minus($pt2);
+
+            var s = (-s1.y * ($pt0.x - $pt2.x) + s1.x * ($pt0.y - $pt2.y)) / (-s2.x * s1.y + s1.x * s2.y);
+            var t = ( s2.x * ($pt0.y - $pt2.y) - s2.y * ($pt0.x - $pt2.x)) / (-s2.x * s1.y + s1.x * s2.y);
+
+            if (s >= 0 && s <= 1 && t >= 0 && t <= 1)
+            {
+                var intersect = new vec2($pt0.x + (t * s1.x), $pt0.y + (t * s1.y));
+                return intersect;
+            }
+
+            return null; // No collision
+        }
+        
+        function sign(x) { return x ? x < 0 ? -1 : 1 : 0; }
+
+        function Actor($x, $y, $velocity, $radius){
+            this.pos = new vec2($x, $y);
+            this.prevPos = new vec2($x, $y);
+            this.radius = $radius;
+            this.velocity = ($velocity) ? $velocity : new vec2();
+            this.heading = ($velocity) ? this.velocity.normalize() : new vec2(1, 0);
+            this.alive = true;
+            this.aliveFrames = 0;
+            
+            this.maxTurnRate = 0.1;
+            this.maxSpeed = 7.5;
+            
+            this.smartFleePts = [];
+        }
+        
+        Actor.prototype.getSteeringForce = function(){
+            return new vec2();
+        }
+        
+        Actor.prototype.update = function(){
+            ++this.aliveFrames;
+            var oldPos = this.pos.plus(new vec2());
+            var steeringForce = this.getSteeringForce().divide(33.0);
+            var accel = steeringForce.plus(new vec2(0, 0.1));
+            var implicitVelocity = this.pos.minus(this.prevPos).plus(accel);
+            var userSetVelocity = this.velocity.minus(implicitVelocity);
+            accel = accel.plus(userSetVelocity).times(0.99);
+
+            this.velocity = implicitVelocity;//.plus(accel);
+            // var speed = this.velocity.length();
+            //this.velocity = (speed == 0) ? new vec2() : this.velocity.divide(speed / Math.min(speed, this.maxSpeed));
+            
+            this.pos = this.pos.plus(this.velocity);
+            
+            this.heading = this.velocity.normalize();
+
+            this.checkLevelCollisions(level);
+
+            this.prevPos = oldPos;
+        }
+
+        Actor.prototype.checkLevelCollisions = function($lvl){
+            var tx = parseInt(this.pos.x / TILE_SIZE);
+            var ty = parseInt(this.pos.y / TILE_SIZE);
+            var tIndex = ty * $lvl.width + tx;
+            if(tIndex >= $lvl.tiles.length || tx < 0 || ty < 0 || tx >= $lvl.width || ty >= $lvl.height)
+                return;
+            var tile = $lvl.tiles[tIndex];
+            if(tile == null)
+
+            this.handleTileCollision(tile);
+
+             var ntx = tx + sign(this.velocity.x);
+            if(ntx != tx && ntx >= 0 && ntx < $lvl.width)
+                this.handleTileCollision($lvl.tiles[ty * $lvl.width + ntx])
+
+            var nty = ty + sign(this.velocity.y);
+            if(nty != ty && nty >= 0 && nty < $lvl.height)
+                this.handleTileCollision($lvl.tiles[nty * $lvl.width + tx]);
+
+           
+        }
+
+        Actor.prototype.handleTileCollision = function($tile){
+            switch($tile.type){
+                case "#":
+                    var closePt = $tile.getClosestPt(this.pos);
+                    var delta = this.pos.minus(closePt);
+                    var deltaLength = delta.length();
+                    if(deltaLength < this.radius){
+                        context.beginPath();
+                        context.arc(closePt.x, closePt.y, 3, 0, Math.PI * 2);
+                        context.stroke();
+                        context.fillStyle = "#F00";
+                        context.fill();
+                        var normVelocity = this.velocity.normalize();
+
+                        var errorAmount = (this.radius - deltaLength);// * normVelocity.dot(delta.normalize());
+                        if(delta.dot(closePt.minus($tile.center)) < 0)
+                            delta = delta.times(-1);
+                        this.pos = this.pos.plus(delta.times(errorAmount / deltaLength));
+                        // this.pos = this.pos.minus(normVelocity.times(errorAmount));
+                    } else {
+                        // for(var i = 0; i < 4; i++){
+                        //     var offset = this.velocity.normalize().times(this.radius);
+                        //     var v1 = this.pos.plus(offset);
+                        //     var v2 = this.prevPos;//.minus(offset);
+                        //     var edge = $tile.getEdge(i);
+                        //     var inter = findIntersection(v1, v2, edge.v1, edge.v2);
+                        //     if(inter != null){
+                        //         var delta = this.pos.minus(inter);//.normalize().times(this.radius);
+                        //         var length = delta.length();
+                        //         var error = Math.abs(this.radius - length);
+                        //         this.pos = this.pos.plus(delta.times(error / length));
+                        //     }
+                        // }
+                    }
+                    break;
+            }
+            
+        }
+        
+        Actor.prototype.seek = function($target){
+            var desiredVelocity = $target.minus(this.pos).normalize().times(this.maxSpeed);
+            return desiredVelocity.minus(this.velocity);
+        }
+        
+        Actor.prototype.flee = function($actors){
+            var count = $actors.length;
+            var desiredVelocity = new vec2(0, 0);
+            for(var i = 0; i < count; i++){
+                var a = $actors[i];
+                if(a == this)
+                    continue;
+                var delta = this.pos.minus(a.pos);
+                var dist = delta.lengthSquared();
+                if(dist > 10000)
+                    continue;
+                desiredVelocity = desiredVelocity.plus( delta.divide(dist));
+            }
+            desiredVelocity = desiredVelocity.normalize().times(this.maxSpeed);
+            return desiredVelocity.minus(this.velocity);
+        }
+        
+        Actor.prototype.smartFlee = function($actors){
+            this.smartFleePts = new Array();
+            
+            var count = $actors.length;
+            var desiredVelocity = new vec2(0, 0);
+            for(var i = 0; i < count; i++){
+                var a = $actors[i];
+                if(a == this)
+                    continue;
+                var delta = this.pos.minus(a.pos);
+                
+                //if the thing we are fleeing from isn't facing us then ignore it.
+                if(a.heading.dot(delta.normalize()) < 0)
+                    continue;
+                
+                //ignore it if it is too far away.
+                var dist = delta.length();
+                if(dist > 100)
+                    continue;
+                
+                //flee in the object by sidestepping rather than running straight away
+                var projectedPt = a.heading.times(a.heading.dot(delta)).plus(a.pos);
+                delta = this.pos.minus(projectedPt);
+                
+                desiredVelocity = desiredVelocity.plus(delta.normalize().divide(dist));
+            }
+            desiredVelocity = desiredVelocity.normalize().times(this.maxSpeed);
+            return desiredVelocity.minus(this.velocity);
+        }
+        
+        Actor.prototype.draw = function(){
+            context.beginPath();
+            context.arc(this.pos.x, this.pos.y, this.radius, 0, Math.PI*2, true);
+            context.stroke();
+
+            context.beginPath();
+            context.arc(this.prevPos.x, this.prevPos.y, this.radius - 2, 0, Math.PI*2, true);
+            context.stroke();
+
+            context.beginPath();
+            context.moveTo(this.pos.x, this.pos.y);
+            var end = this.pos.plus(this.velocity.times(15));
+            context.lineTo(end.x, end.y);
+            context.stroke();
+            
+            for(var i = 0; i < this.smartFleePts.length; i++){
+                //alert("count: " + )
+                context.beginPath();
+                context.arc(this.smartFleePts[i].x, this.smartFleePts[i].y, 2, 0, Math.PI*2, true);
+                context.stroke();
+            }
+        }
+        
+        EnemyA.prototype = new Actor();
+        EnemyA.prototype.constructor = EnemyA;
+        function EnemyA($x, $y){
+            Actor.call(this, $x, $y, new vec2(1,0), 8);
+        }
+        
+        EnemyA.prototype.getSteeringForce = function(){
+            return this.seek(player.pos).times(0.8).plus(this.smartFlee(bullets)).plus(this.flee(actors).times(0.4));
+        }
+        
+        EnemyA.prototype.update = function(){
+            Actor.prototype.update.call(this);
+            
+            this.checkHits([player]);
+        }
+        
+        EnemyA.prototype.checkHits = function($actors){
+            for(var i = 0; i < $actors.length; i++){
+                var a = $actors[i];
+                var dist = (a.radius + this.radius) * (a.radius + this.radius);
+                if(this.pos.minus(a.pos).lengthSquared() < dist){
+                    a.alive = false;
+                    alert("you died.  SCORE: " + killCount);
+                }
+            }
+        }
+        
+        Player.prototype = new Actor();
+        Player.prototype.constructor = Player;
+        function Player($x, $y){
+            Actor.call(this, $x, $y, new vec2(), 10);
+        }
+        
+        Player.prototype.update = function(){
+            Actor.prototype.update.call(this);
+        }
+        
+        
+        Bullet.prototype = new Actor();
+        Bullet.prototype.constructor = Bullet;
+        function Bullet($x, $y, $velocity){
+            Actor.call(this, $x, $y, $velocity, 5);
+            this.prevPos = this.pos.minus($velocity);
+        }
+        
+        Bullet.prototype.isOffScreen = function(){
+            // if any of these conditionals are true then the bullet can't be seen.
+            return (this.pos.x + this.radius < 0)
+               || (this.pos.x - this.radius > WIDTH)
+               || (this.pos.y + this.radius < 0)
+               || (this.pos.y - this.radius > HEIGHT);
+        }
+        
+        Bullet.prototype.update = function(){
+            Actor.prototype.update.call(this);
+            
+            this.checkHits(actors);
+        }
+        
+        Bullet.prototype.checkHits = function($actors){
+            for(var i = 0; i < $actors.length; i++){
+                var a = $actors[i];
+                var dist = (a.radius + this.radius) * (a.radius + this.radius);
+                if(this.pos.minus(a.pos).lengthSquared() < dist){
+                    $actors.splice(i,1);
+                    --i;
+                    killCount++;
+                }
+            }
+        }
+
+        const TOP = 0;
+        const RIGHT = 1;
+        const BOTTOM = 2;
+        const LEFT = 3;
+        function Edge($v1, $v2){
+            this.v1 = $v1;
+            this.v2 = $v2;
+        }
+
+        function Tile($x, $y, $type){
+            this.x = $x; 
+            this.y = $y;
+            this.pos = new vec2($x * TILE_SIZE, $y * TILE_SIZE);
+            this.center = this.pos.plus(new vec2(TILE_SIZE * 0.5, TILE_SIZE * 0.5));
+            this.type = $type;
+        }
+
+        Tile.prototype.closestPointOnEdge = function(refPt, edge){
+            var v1 = edge.v1;
+            var v2 = edge.v2
+            var v1ToRef = refPt.minus(v1);//refPt.minus(this.pos).minus(v1);
+            var edge = v2.minus(v1);
+            var normEdge = edge.normalize();
+
+            var dot = normEdge.dot(v1ToRef);
+            var projectedPt = normEdge.times(dot);
+
+            context.strokeStyle = "#00FF00";
+            context.lineWidth = 3;
+            context.moveTo(v1.x, v1.y);
+            context.lineTo(v2.x, v2.y);
+            context.stroke();
+            context.lineWidth = 1;
+            context.strokeStyle = "#000000";
+
+            if(dot < 0){
+                return v1;//this.pos.plus(v1);
+            } else if(projectedPt.length() > edge.length()) {
+                return v2;//this.pos.plus(v2);
+            } else {
+                return v1.plus(projectedPt);//this.pos.plus(v1).plus(projectedPt);
+            }
+        }
+
+        Tile.prototype.getClosestEdge = function($pt){
+            var delta = $pt.minus(this.center);
+            if(Math.abs(delta.x) > Math.abs(delta.y)){
+                if(delta.x < 0){
+                    return this.getEdge(LEFT);
+                } else {
+                    return this.getEdge(RIGHT);
+                }
+            } else {
+                if(delta.y > 0){
+                    return this.getEdge(BOTTOM);
+                } else {
+                    return this.getEdge(TOP);
+                }
+            }
+        }
+
+        Tile.prototype.getClosestPt = function($pt){
+            var delta = $pt.minus(this.center);
+            if(Math.abs(delta.x) > Math.abs(delta.y)){
+                if(delta.x < 0){
+
+                    return this.closestPointOnEdge($pt, this.getEdge(LEFT));
+                } else {
+                    return this.closestPointOnEdge($pt, this.getEdge(RIGHT));
+                }
+            } else {
+                if(delta.y > 0){
+                    return this.closestPointOnEdge($pt, this.getEdge(BOTTOM));
+                } else {
+                    return this.closestPointOnEdge($pt, this.getEdge(TOP));
+                }
+            }
+        }
+
+        Tile.prototype.getEdge = function($index){
+            switch($index){
+                case TOP:
+                    return new Edge(this.pos, this.pos.plus(new vec2(TILE_SIZE, 0)));
+                case RIGHT:
+                    return new Edge(this.pos.plus(new vec2(TILE_SIZE, 0)), this.pos.plus(new vec2(TILE_SIZE, TILE_SIZE)));
+                case BOTTOM:
+                    return new Edge(this.pos.plus(new vec2(TILE_SIZE, TILE_SIZE)), this.pos.plus(new vec2(0, TILE_SIZE)));
+                case LEFT:
+                    return new Edge(this.pos.plus(new vec2(0, TILE_SIZE)), this.pos); 
+            }
+        }
+
+        function Level($levelData){
+            this.tiles = [];
+            var rows = $levelData.split("\n");
+            var rowStride = rows[0].length;
+            for(var i = 0; i < rows.length; i++){
+                var row = rows[i];
+                for(var j = 0; j < rowStride; j++){
+                    var tileType = row[j];
+                    this.tiles.push(new Tile(j, i, tileType));
+                }
+            }
+
+            this.width = rowStride;
+            this.height = rows.length;
+        }
+
+        Level.prototype.draw = function(){
+            for(var i = 0; i < this.tiles.length; i++){
+                var tile = this.tiles[i];
+                switch(tile.type){
+                    case "#":
+                        context.beginPath();
+                        context.strokeRect(tile.pos.x, tile.pos.y, TILE_SIZE, TILE_SIZE);
+                        break;
+                }
+            }
+        }
+
+        Level.prototype.getPlayerSpawn = function(){
+            for(var i = 0; i < this.tiles.length; i++){
+                var tile = this.tiles[i];
+                if(tile.type == "P"){
+                    return new vec2(tile.pos.x + (TILE_SIZE * 0.5), tile.pos.y + (TILE_SIZE * 0.5));
+                }
+            }
+        }
+        
+        function init(){            
+            canvas = document.getElementById('c');
+            context = canvas.getContext('2d');
+
+            level = new Level(defaultLevel);
+            
+            var playerLoc = level.getPlayerSpawn();
+            player = new Player(playerLoc.x, playerLoc.y);//(center.x, center.y);
+            
+            var loc = new vec2(0, 0);
+            // for(var i = 0; i < 10; i++){
+            //     spawnActor();
+            // }
+            
+            runLoop();
+        }
+        
+        function spawnActor(){
+            var loc = new vec2(0, 0);
+            do{
+                loc.x = Math.random() * WIDTH;
+                loc.y = Math.random() * HEIGHT;
+            }while(loc.minus(player.pos).lengthSquared() < 30000)
+            
+            actors.push(new EnemyA(loc.x, loc.y));
+        }
+        
+        function onMouseMove(event){
+            mousePosition.x = event.pageX;
+            mousePosition.y = event.pageY;
+        }
+        
+        function onMouseDown(event){
+            mouseDown = true;
+        }
+        
+        function onMouseUp(event){
+            mouseDown = false;
+        }
+        
+        function onKeyDown(event){
+            var key = String.fromCharCode(event.which).toUpperCase();
+            console.log("key '" + key + "' pressed.")
+            keyboardState[key] = true;
+            updateKeyboardVec();
+        }
+        
+        function onKeyUp(event){
+            var key = String.fromCharCode(event.which).toUpperCase();
+            keyboardState[key] = false;
+            updateKeyboardVec();
+        }
+        
+        function updateKeyboardVec(){
+            keyboardVec = new vec2(0, 0);
+            if(keyboardState['W']){
+                // keyboardVec.y -= 1;
+            }    
+            if(keyboardState['A']){
+                keyboardVec.x -= 1;
+            }
+            if(keyboardState['S']){
+                // keyboardVec.y += 1;
+            }
+            if(keyboardState['D']){
+                keyboardVec.x += 1;
+            }
+            if(keyboardState[' ']){
+                player.prevPos = player.prevPos.minus(new vec2(0, -6));
+            }
+                
+            keyboardVec = keyboardVec.normalize().times(0.1);
+        }
+        
+        function runLoop(){
+            //remove everything that we drew out previous frame from the screen
+            context.clearRect(0, 0, WIDTH, HEIGHT);
+            player.pos = player.pos.plus(keyboardVec);
+            if(mouseDown && counter % 10 == 0){
+                var mouseDelta = mousePosition.minus(player.pos);
+                var bulletVelocity = mouseDelta.normalize().times(20).plus(keyboardVec);
+                
+                //create a new bullet each frame
+                var bullet = new Bullet(player.pos.x, player.pos.y, bulletVelocity);            
+                bullets.push(bullet);
+            }
+            
+            // if(actors.length < 10 && counter % 50 == 0)
+            //     spawnActor();
+            
+            for(var i = 0; i < bullets.length; i++){
+                var b = bullets[i];
+                b.update();
+                
+                if(b.isOffScreen())
+                    bullets.splice(i, 1);
+                
+                b.draw();
+            }
+            
+            for(var i = 0; i < actors.length; i++){
+                var a = actors[i];
+                a.update();
+                a.draw();
+            }
+
+            level.draw();
+            
+            //draw the player
+            player.update();
+            player.draw();
+            
+            // increment the counter and call the runLoop function after a 14 ms delay
+            counter += 1;
+            if(player.alive)
+                window.setTimeout(runLoop, 14);
+        }
+        
+        
+    </script>
+</head>
+<body>
+    <canvas id="c" width="1280px" height="720px">Canvas not supported!</canvas>
+</body>
+</html>
