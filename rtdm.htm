@@ -54,10 +54,10 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
                             "#............#..............#..........#\n" +
                             "#.......######........#.....#..........#\n" +
                             "#.....................##########.......#\n" +
-                            "#......................................#\n" +
-                            "#......................................#\n" +
-                            "#...........P..........................#\n" +
-                            "#......................................#\n" +
+                            "#....................................###\n" +
+                            "#..................................#####\n" +
+                            "#...........P....................#######\n" +
+                            "#.............................##########\n" +
                             "########################################\n";
         
         window.onload = init;
@@ -109,6 +109,47 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
             return this.x * $vec2.x + this.y * $vec2.y;
         }
 
+        vec2.prototype.toWorldCoord = function(){
+            return this;
+
+            // var x1 = this.x - camera.frustrumWidth;// - camera.x;
+            // var y1 = this.y - camera.frustrumHeight;// - camera.y;
+
+            // var scaleRatio = camera.scaleRatio(this.z);
+            // x1 = (x1 / scaleRatio) + camera.x;
+            // y1 = (y1 / scaleRatio) + camera.y;
+            // return new vec3(x1, y1, 0);
+        }
+            
+         vec2.prototype.toScreenCoord = function(){
+            return this;
+
+            // var scaleRatio = camera.scaleRatio(this.z);
+            
+            // var deltaX = this.x - camera.x;
+            // var deltaY = this.y - camera.y;
+            // var x2 = camera.frustrumWidth + (deltaX * scaleRatio);
+            // var y2 = camera.frustrumHeight + (deltaY * scaleRatio);
+            // return new vec3(x2, y2, 0);
+        }
+
+        vec2.prototype.SRT = function(scale, rotation, translationX, translationY){
+            var x = this.x * scale;
+            var y = this.y * scale;
+            var cos = Math.cos(rotation);
+            var sin = Math.sin(rotation);
+            var newX = cos * x - sin * y + translationX;
+            var newY = sin * x + cos * y + translationY;
+            return new vec2(newX, newY);
+        }
+
+        pm2.prototype = new vec2();
+        pm2.prototype.constructor = pm2;
+        function pm2($x, $y, $mass){
+            pm2.call(this, $x, $y);
+            this.mass = ($mass != null) ? $mass : 1.0;
+        }
+
         function findIntersection($pt0, $pt1, $pt2, $pt3){
             var s1 = $pt1.minus($pt0);
             var s2 = $pt3.minus($pt2);
@@ -119,6 +160,25 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
             if (s >= 0 && s <= 1 && t >= 0 && t <= 1)
             {
                 var intersect = new vec2($pt0.x + (t * s1.x), $pt0.y + (t * s1.y));
+
+                context.strokeStyle = "#0000FF";
+                context.beginPath();
+                context.moveTo($pt0.x, $pt0.y);
+                context.lineTo($pt1.x, $pt1.y);
+                context.stroke();
+
+                context.strokeStyle = "#FF00FF";
+
+                context.beginPath();
+                context.moveTo($pt2.x, $pt2.y);
+                context.lineTo($pt3.x, $pt3.y);
+                context.stroke();
+
+                context.beginPath();
+                context.arc(intersect.x, intersect.y, 3, 0, Math.PI * 2);
+                context.stroke();
+                context.strokeStyle = "#000000";
+
                 return intersect;
             }
 
@@ -135,6 +195,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
             this.heading = ($velocity) ? this.velocity.normalize() : new vec2(1, 0);
             this.alive = true;
             this.aliveFrames = 0;
+            
             
             this.maxTurnRate = 0.1;
             this.maxSpeed = 7.5;
@@ -171,21 +232,30 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
         Actor.prototype.checkLevelCollisions = function($lvl){
             var tx = parseInt(this.pos.x / TILE_SIZE);
             var ty = parseInt(this.pos.y / TILE_SIZE);
-            var tIndex = ty * $lvl.width + tx;
-            if(tIndex >= $lvl.tiles.length || tx < 0 || ty < 0 || tx >= $lvl.width || ty >= $lvl.height)
-                return;
-            var tile = $lvl.tiles[tIndex];
-            if(tile == null)
+            // var tIndex = ty * $lvl.width + tx;
+            // if(tIndex >= $lvl.tiles.length || tx < 0 || ty < 0 || tx >= $lvl.width || ty >= $lvl.height)
+            //     return;
+            // var tile = $lvl.tiles[tIndex];
+            // if(tile == null)
+            //     return;
+            // this.handleTileCollision(tile);
 
-            this.handleTileCollision(tile);
+            //  var ntx = tx + sign(this.velocity.x);
+            // if(ntx != tx && ntx >= 0 && ntx < $lvl.width)
+            //     this.handleTileCollision($lvl.tiles[ty * $lvl.width + ntx])
 
-             var ntx = tx + sign(this.velocity.x);
-            if(ntx != tx && ntx >= 0 && ntx < $lvl.width)
-                this.handleTileCollision($lvl.tiles[ty * $lvl.width + ntx])
+            // var nty = ty + sign(this.velocity.y);
+            // if(nty != ty && nty >= 0 && nty < $lvl.height)
+            //     this.handleTileCollision($lvl.tiles[nty * $lvl.width + tx]);
 
-            var nty = ty + sign(this.velocity.y);
-            if(nty != ty && nty >= 0 && nty < $lvl.height)
-                this.handleTileCollision($lvl.tiles[nty * $lvl.width + tx]);
+            for(var y = -1; y <= 1; y++){
+                for(var x = -1; x <= 1; x++){
+                    var ntx = tx - x;
+                    var nty = ty - y;
+                    if(ntx >= 0 && ntx < $lvl.width && nty >= 0 && nty < $lvl.height)
+                        this.handleTileCollision($lvl.tiles[nty * $lvl.width + ntx]);
+                }
+            }
 
            
         }
@@ -295,46 +365,98 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
             var end = this.pos.plus(this.velocity.times(15));
             context.lineTo(end.x, end.y);
             context.stroke();
-            
-            for(var i = 0; i < this.smartFleePts.length; i++){
-                //alert("count: " + )
-                context.beginPath();
-                context.arc(this.smartFleePts[i].x, this.smartFleePts[i].y, 2, 0, Math.PI*2, true);
-                context.stroke();
+        }
+        
+        AxisAlignedActor.prototype = new Actor();
+        AxisAlignedActor.prototype.constructor = AxisAlignedActor;
+        function AxisAlignedActor($x, $y, $velocity, $size){
+            Actor.call(this, $x, $y, $velocity, $size);
+
+            this.shape = [  new vec2(-1, -1),
+                            new vec2( 1, -1),
+                            new vec2( 1,  1),
+                            new vec2(-1,  1)];
+            for(var i = 0; i < this.shape.length; i++){
+                this.shape[i] = this.shape[i].SRT($size, 0, 0, 0);
             }
         }
-        
-        EnemyA.prototype = new Actor();
-        EnemyA.prototype.constructor = EnemyA;
-        function EnemyA($x, $y){
-            Actor.call(this, $x, $y, new vec2(1,0), 8);
-        }
-        
-        EnemyA.prototype.getSteeringForce = function(){
-            return this.seek(player.pos).times(0.8).plus(this.smartFlee(bullets)).plus(this.flee(actors).times(0.4));
-        }
-        
-        EnemyA.prototype.update = function(){
-            Actor.prototype.update.call(this);
-            
-            this.checkHits([player]);
-        }
-        
-        EnemyA.prototype.checkHits = function($actors){
-            for(var i = 0; i < $actors.length; i++){
-                var a = $actors[i];
-                var dist = (a.radius + this.radius) * (a.radius + this.radius);
-                if(this.pos.minus(a.pos).lengthSquared() < dist){
-                    a.alive = false;
-                    alert("you died.  SCORE: " + killCount);
-                }
+
+        AxisAlignedActor.prototype.handleTileCollision = function($tile){
+            switch($tile.type){
+                case "#":
+                    for(var i = 0; i < this.shape.length; i++){
+                        var pt = this.pos.plus(this.shape[i]);
+                        
+                        if(!$tile.isPointInside(pt))
+                           continue;
+
+                        for(var j = 0; j < 4; j++){
+                            if((j == TOP && this.velocity.y < 0) || (j == RIGHT && this.velocity.x > 0) 
+                                || (j == BOTTOM && this.velocity.y > 0) || (j == LEFT && this.velocity.x < 0))
+                                continue;
+
+                            var edge = $tile.getEdge(j);
+                            var closePt = findIntersection(pt, pt.minus(this.velocity), edge.v1, edge.v2);
+                            if(closePt){
+                                if(j == 2)
+                                    console.log("bottom hit");
+
+
+                                // var ev = edge.v2.minus(closePt);
+                                // var evn = ev.normalize();
+                                // var ratio = -pt.minus(closePt).dot(evn);
+                                // var closePt2 = closePt.plus(evn.times(ratio));
+                                var closePt2 = $tile.closestPointOnEdge(pt, edge, this.velocity);
+
+                                var delta = pt.minus(closePt2);
+                                this.pos = this.pos.minus(delta);
+                                pt = pt.minus(delta);
+                            }
+                        }
+                        // var closePt = $tile.getClosestPt(pt, this.velocity);
+
+                        // context.beginPath();
+                        // context.arc(closePt.x, closePt.y, 3, 0, Math.PI * 2);
+                        // context.stroke();
+
+                        // var delta = pt.minus(closePt);
+                        // this.pos = this.pos.minus(delta);
+                    }
+                    break;
             }
         }
+
+        AxisAlignedActor.prototype.draw = function(){
+            context.strokeStyle = "#00CCCC";
+            context.fillStyle = this.color;
+            
+            if(this.shape != null){
+                this.drawPoly();
+                return;
+            }
+        }
+
+        AxisAlignedActor.prototype.drawPoly = function(){
+            context.beginPath();
+            for(var i = 0; i < this.shape.length; i++)
+            {
+                var pt = this.shape[i].plus(this.pos).toScreenCoord();
+                if(i == 0)
+                    context.moveTo(pt.x, pt.y);
+                else
+                    context.lineTo(pt.x, pt.y);
+            }
+            context.fill();
+            context.closePath();
+            context.stroke();
+        }
         
-        Player.prototype = new Actor();
+
+        
+        Player.prototype = new AxisAlignedActor();
         Player.prototype.constructor = Player;
         function Player($x, $y){
-            Actor.call(this, $x, $y, new vec2(), 10);
+            AxisAlignedActor.call(this, $x, $y, new vec2(1,0), 10);
         }
         
         Player.prototype.update = function(){
@@ -342,10 +464,10 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
         }
         
         
-        Bullet.prototype = new Actor();
+        Bullet.prototype = new AxisAlignedActor();
         Bullet.prototype.constructor = Bullet;
         function Bullet($x, $y, $velocity){
-            Actor.call(this, $x, $y, $velocity, 5);
+            AxisAlignedActor.call(this, $x, $y, $velocity, 2);
             this.prevPos = this.pos.minus($velocity);
         }
         
@@ -392,6 +514,14 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
             this.type = $type;
         }
 
+        Tile.prototype.isPointInside = function(pt){
+            var b1 = pt.x >= this.pos.x;
+            var b2 = pt.x <= (this.pos.x + TILE_SIZE);
+            var b3 = pt.y >= this.pos.y;
+            var b4 = pt.y <= (this.pos.y + TILE_SIZE);
+            return (b1 && b2 && b3 && b4);
+        }
+
         Tile.prototype.closestPointOnEdge = function(refPt, edge){
             var v1 = edge.v1;
             var v2 = edge.v2
@@ -410,18 +540,60 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
             context.lineWidth = 1;
             context.strokeStyle = "#000000";
 
+            var tmpPt;
             if(dot < 0){
-                return v1;//this.pos.plus(v1);
+                tmpPt = v1;//this.pos.plus(v1);
             } else if(projectedPt.length() > edge.length()) {
-                return v2;//this.pos.plus(v2);
+                tmpPt = v2;//this.pos.plus(v2);
             } else {
-                return v1.plus(projectedPt);//this.pos.plus(v1).plus(projectedPt);
+                tmpPt = v1.plus(projectedPt);//this.pos.plus(v1).plus(projectedPt);
             }
+            return tmpPt;
+        }
+
+        Tile.prototype.closestPointOnEdges = function(refPt, velocity){
+            var minDist = 100000; 
+            var closestPt;
+            for(var i = 0; i < 4; i++){
+                var edge = this.getEdge(i);
+                var v1 = edge.v1;
+                var v2 = edge.v2
+                var v1ToRef = refPt.minus(v1);//refPt.minus(this.pos).minus(v1);
+                var edge = v2.minus(v1);
+                var normEdge = edge.normalize();
+
+                var dot = normEdge.dot(v1ToRef);
+                var projectedPt = normEdge.times(dot);
+
+                context.strokeStyle = "#00FF00";
+                context.lineWidth = 3;
+                context.moveTo(v1.x, v1.y);
+                context.lineTo(v2.x, v2.y);
+                context.stroke();
+                context.lineWidth = 1;
+                context.strokeStyle = "#000000";
+
+                var tmpPt;
+                if(dot < 0){
+                    tmpPt = v1;//this.pos.plus(v1);
+                } else if(projectedPt.length() > edge.length()) {
+                    tmpPt = v2;//this.pos.plus(v2);
+                } else {
+                    tmpPt = v1.plus(projectedPt);//this.pos.plus(v1).plus(projectedPt);
+                }
+
+                var tmpDist = tmpPt.minus(refPt).length();
+                if(tmpDist < minDist){
+                    closestPt = tmpPt;
+                    minDist = tmpDist;
+                }
+            }
+            return closestPt;
         }
 
         Tile.prototype.getClosestEdge = function($pt){
             var delta = $pt.minus(this.center);
-            if(Math.abs(delta.x) > Math.abs(delta.y)){
+            if(Math.abs(Math.abs(delta.x) - TILE_SIZE * 0.5) < Math.abs(Math.abs(delta.y) - TILE_SIZE * 0.5)){
                 if(delta.x < 0){
                     return this.getEdge(LEFT);
                 } else {
@@ -436,22 +608,22 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
             }
         }
 
-        Tile.prototype.getClosestPt = function($pt){
-            var delta = $pt.minus(this.center);
-            if(Math.abs(delta.x) > Math.abs(delta.y)){
-                if(delta.x < 0){
-
-                    return this.closestPointOnEdge($pt, this.getEdge(LEFT));
-                } else {
-                    return this.closestPointOnEdge($pt, this.getEdge(RIGHT));
-                }
-            } else {
-                if(delta.y > 0){
-                    return this.closestPointOnEdge($pt, this.getEdge(BOTTOM));
-                } else {
-                    return this.closestPointOnEdge($pt, this.getEdge(TOP));
-                }
-            }
+        Tile.prototype.getClosestPt = function($pt, $velocity){
+            this.closestPointOnEdges($pt, $velocity);
+            // var delta = $pt.minus(this.center);
+            // if(Math.abs(delta.x) > Math.abs(delta.y)){
+            //     if(delta.x < 0){
+            //         return this.closestPointOnEdge($pt, this.getEdge(LEFT), $velocity);
+            //     } else {
+            //         return this.closestPointOnEdge($pt, this.getEdge(RIGHT), $velocity);
+            //     }
+            // } else {
+            //     if(delta.y > 0){
+            //         return this.closestPointOnEdge($pt, this.getEdge(BOTTOM), $velocity);
+            //     } else {
+            //         return this.closestPointOnEdge($pt, this.getEdge(TOP), $velocity);
+            //     }
+            // }
         }
 
         Tile.prototype.getEdge = function($index){
@@ -619,7 +791,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
             // increment the counter and call the runLoop function after a 14 ms delay
             counter += 1;
             if(player.alive)
-                window.setTimeout(runLoop, 14);
+                window.setTimeout(runLoop, 140);//14);
         }
         
         
