@@ -387,10 +387,23 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
                        return;
 
                     var result = this.AABBSweep($tile);
-                    if(result.collision){
-                        var hitTime = (1.0 - result.u1);
+                    if(result.collision && (result.u0 != 0 && result.u1 != 0)){
+                        // if(counter % 20 == 0 && this != player)
+                        //     console.log("u0: " + result.u0 + "\t\tu1: " + result.u1);
+                        var hitTime = (result.u0);
                         var offset = this.velocity.times(hitTime);
-                        this.pos = this.pos.minus(offset);
+                        this.pos = this.prevPos.plus(offset);
+
+                        var overlap = this.getTileOverlap($tile);
+                        if(overlap == null)
+                            return;
+                        if(overlap.x < overlap.y){
+                            this.velocity.x *= -1;
+                        } else {
+                            this.velocity.y *= -1;
+                        }
+                        this.pos = this.pos.plus(this.velocity.times(1.0 - result.u0));
+
                     }
 
                     // var overlap = this.getTileOverlap($tile);
@@ -460,10 +473,10 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
         }
 
         AxisAlignedActor.prototype.AABBSweep = function($b){
-            var A = new AxisAlignedBoundingBox( this.pos, this.extents );//previous state of AABB A
-            var B = new AxisAlignedBoundingBox( $b.pos, $b.extents );//previous state of AABB B
+            var A = new AxisAlignedBoundingBox( this.prevPos, this.extents );//previous state of AABB A
+            var B = new AxisAlignedBoundingBox( $b.center, $b.extents );//previous state of AABB B
             var va = this.pos.minus(this.prevPos);//displacement of A
-            var vb = $b.pos.minus($b.prevPos);//displacement of B
+            var vb = $b.center.minus($b.prevPos);//displacement of B
             //the problem is solved in A's frame of reference
 
             var v = vb.minus(va);
@@ -491,16 +504,17 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
             //find the possible first and last times
             //of overlap along each axis
             for( var i = 0; i < 2; i++ ) {
-                if( A.max(i) < B.min(i) && v[i] < 0 ) {
-                    u_0[i] = (A.max(i) - B.min(i)) / v[i];
-                } else if( B.max(i) < A.min(i) && v[i] > 0 ) {
-                    u_0[i] = (A.min(i) - B.max(i)) / v[i];
+                var j = (i == 0) ? "x" : "y";
+                if( A.max(i) < B.min(i) && v[j] < 0 ) {
+                    u_0[j] = (A.max(i) - B.min(i)) / v[j];
+                } else if( B.max(i) < A.min(i) && v[j] > 0 ) {
+                    u_0[j] = (A.min(i) - B.max(i)) / v[j];
                 }
 
-                if( B.max(i) > A.min(i) && v[i] < 0 ) {
-                    u_1[i] = (A.min(i) - B.max(i)) / v[i];
-                } else if( A.max(i) > B.min(i) && v[i] > 0 ) {
-                    u_1[i] = (A.max(i) - B.min(i)) / v[i];
+                if( B.max(i) > A.min(i) && v[j] < 0 ) {
+                    u_1[j] = (A.min(i) - B.max(i)) / v[j];
+                } else if( A.max(i) > B.min(i) && v[j] > 0 ) {
+                    u_1[j] = (A.max(i) - B.min(i)) / v[j];
                 }
             }
 
@@ -528,7 +542,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
             var tMaxX = this.pos.x + this.shape[1].x;
             var sx = 0;
             /* test the X direction */
-            if(tMaxX < $tile.pos.x || ($tile.pos.x + TILE_SIZE).x < tMinX) {
+            if(tMaxX < $tile.pos.x || ($tile.pos.x + TILE_SIZE) < tMinX) {
                 return null;
             } 
             // get center X's of this and other box
@@ -547,7 +561,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
             var tMaxY = this.pos.y + this.shape[2].y;
             var sy = 0;
             /* test the X direction */
-            if(tMaxY < $tile.pos.y || ($tile.pos.y + TILE_SIZE).y < tMinY) {
+            if(tMaxY < $tile.pos.y || ($tile.pos.y + TILE_SIZE) < tMinY) {
                 return null;
             } 
             // get center Y's of this and other box
@@ -560,10 +574,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
                 yOverlap = ($tile.pos.y + TILE_SIZE) - tMinY;
             }
             sy = Math.max($tile.pos.y, tMinY);
-
-            if(xOverlap > this.radius * 2){
-                console.log("what?");
-            }
 
             context.fillStyle = "#FFFF00";
             context.beginPath();
@@ -616,7 +626,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
         Bullet.prototype = new AxisAlignedActor();
         Bullet.prototype.constructor = Bullet;
         function Bullet($x, $y, $velocity){
-            AxisAlignedActor.call(this, $x, $y, $velocity, 2);
+            AxisAlignedActor.call(this, $x, $y, $velocity, 8);
             this.prevPos = this.pos.minus($velocity);
             this.stoppedFrames = 0;
         }
@@ -634,7 +644,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
             
             this.checkHits(actors);
 
-            if(this.velocity.length() < 0.01){
+            if(this.velocity.lengthSquared() < 0.15){
                 this.stoppedFrames++;
                 if(this.stoppedFrames > 100){
                     var index = bullets.indexOf(this);
@@ -673,8 +683,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
             this.center = this.pos.plus(new vec2(TILE_SIZE * 0.5, TILE_SIZE * 0.5));
             this.type = $type;
 
-            this.extents = new vec2(TILE_SIZE, TILE_SIZE);
-            this.prevPos = new vec2(this.pos.x, this.pos.y);
+            this.extents = new vec2(TILE_SIZE * 0.5 , TILE_SIZE * 0.5);
+            this.prevPos = new vec2(this.center.x, this.center.y);
         }
 
         Tile.prototype.isPointInside = function(pt){
@@ -920,7 +930,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
                 var mouseDelta = mousePosition.minus(player.pos);
                 var bulletVelocity = mouseDelta.normalize().times(20).plus(keyboardVec);
                 
-                //create a new bullet each frame
                 var bullet = new Bullet(player.pos.x, player.pos.y, bulletVelocity);            
                 bullets.push(bullet);
             }
