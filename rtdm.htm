@@ -390,19 +390,21 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
                     if(result.collision && (result.u0 != 0 && result.u1 != 0)){
                         // if(counter % 20 == 0 && this != player)
                         //     console.log("u0: " + result.u0 + "\t\tu1: " + result.u1);
-                        var hitTime = (result.u0);
+                        var hitTime = (1.0 - result.u0);
                         var offset = this.velocity.times(hitTime);
-                        this.pos = this.prevPos.plus(offset);
+                        this.pos = this.pos.minus(offset);
 
-                        var overlap = this.getTileOverlap($tile);
-                        if(overlap == null)
-                            return;
-                        if(overlap.x < overlap.y){
-                            this.velocity.x *= -1;
-                        } else {
-                            this.velocity.y *= -1;
-                        }
-                        this.pos = this.pos.plus(this.velocity.times(1.0 - result.u0));
+                        this.velocity = offset;
+
+                        // var overlap = this.getTileOverlap($tile);
+                        // if(overlap == null)
+                        //     return;
+                        // if(overlap.x < overlap.y){
+                        //     this.velocity.x *= -1;
+                        // } else {
+                        //     this.velocity.y *= -1;
+                        // }
+                        // this.pos = this.pos.plus(this.velocity.times(1.0 - result.u0));
 
                     }
 
@@ -626,7 +628,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
         Bullet.prototype = new AxisAlignedActor();
         Bullet.prototype.constructor = Bullet;
         function Bullet($x, $y, $velocity){
-            AxisAlignedActor.call(this, $x, $y, $velocity, 8);
+            AxisAlignedActor.call(this, $x, $y, $velocity, 3);
             this.prevPos = this.pos.minus($velocity);
             this.stoppedFrames = 0;
         }
@@ -916,10 +918,14 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
                 keyboardVec.x += 1;
             }
             if(keyboardState[' ']){
-                player.prevPos = player.prevPos.minus(new vec2(0, -6));
+                // player.prevPos = player.prevPos.minus(new vec2(0, -6));
+                keyboardVec.y -= 1;
             }
                 
-            keyboardVec = keyboardVec.normalize().times(0.1);
+            if(keyboardVec.lengthSquared() > 0){
+                keyboardVec = keyboardVec.normalize().times(0.25);
+            }
+            player.prevPos = player.prevPos.minus(keyboardVec);
         }
         
         function runLoop(){
