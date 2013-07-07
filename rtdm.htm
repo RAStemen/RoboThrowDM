@@ -368,94 +368,91 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
         }
 
         AxisAlignedActor.prototype.checkLevelCollisions = function($lvl){
+            //figure out the order to check tile collisions
+            // var pt = this.pos;
+            // var x = pt.x / TILE_SIZE;
+            // var y = pt.y / TILE_SIZE;
+            // var tx = parseInt(pt.x / TILE_SIZE);
+            // var ty = parseInt(pt.y / TILE_SIZE);
+
+            // var order = new Array();
+            // order.push({y:ty, x:tx});
+
+            // var yo = Math.max(y - ty, 1 - y - ty);
+            // var xo = Math.max(x - tx, 1 - x - tx);
+            // var max = Math.max(yo, xo);
+
+            // var sx = ( (x - tx) > 0.5 ) ? 1 : -1;
+            // var sy = ( (y - ty) > 0.5 ) ? 1 : -1;
+            // if(max == yo){
+            //     order.push({y:(ty + sy),    x: tx});
+            //     order.push({y:(ty + sy),    x:(tx + sx)});
+            //     order.push({y: ty,          x:(tx + sx)});
+            // } 
+            // else {
+            //     order.push({y: ty,          x:tx + sx});
+            //     order.push({y:(ty + sy),    x:tx + sx});
+            //     order.push({y:(ty + sy),    x:tx});
+            // }
+
+            // for(var i = 0; i < order.length; i++){
+            //     var loc = order[i];
+            //     var tx = loc.x;
+            //     var ty = loc.y;
+            //     if(tx >= 0 && tx < $lvl.width && ty >= 0 && ty < $lvl.height){
+            //         var tile = $lvl.tiles[ty * $lvl.width + tx];
+            //         this.handleTileCollision(tile, pt);
+            //     }
+            // }
+
+
+
+
             var minTime = 1.0;
             var handleSweep = null;
             var t = null;
-            for(var i = 0; i < this.shape.length; i++){
+
+            var val = this.velocity.x > 0;
+            var start = val ? this.shape.length - 1 : 0;
+            var end = val ? -1 : this.shape.length;
+            var step = val ? -1 : 1;
+
+            for(var i = start; i != end; i += step){
                 var pt = this.pos.plus(this.shape[i]);
                 var tx = parseInt(pt.x / TILE_SIZE);
                 var ty = parseInt(pt.y / TILE_SIZE);
                 if(tx >= 0 && tx < $lvl.width && ty >= 0 && ty < $lvl.height){
                     var tile = $lvl.tiles[ty * $lvl.width + tx];
-                    // if(tile.type == "#"){
-                    //     sweep = this.AABBSweep(tile);
-                    //     if(minTime > sweep.u0 && sweep.collision){
-                    //         handleSweep = sweep;
-                    //         t = tile;
-                    //     }
-                    // }
-                    
                     this.handleTileCollision(tile, pt);
                 }
             }
-            // if(handleSweep)
-            //     this.handleTileCollision(t, this.pos, handleSweep);
         }
 
         AxisAlignedActor.prototype.handleTileCollision = function($tile, $pt, $sweepResult){
             switch($tile.type){
                 case "#":                        
-                    // if(!$tile.isPointInside($pt))
-                    //    return;
+                    var result = this.AABBSweep($tile);
+                    if(result.collision){
+                        var overlap = new vec2();
 
-                    var result = this.AABBSweep($tile); //$sweepResult;//
-                    // var result = $sweepResult;//
-                    if(result.collision){// && (result.u0 != 0 && result.u1 != 0)){
-                        var overlap = this.pos.minus($tile.center);
+                        $tile.highlite = true;
 
                         var hitTime = (result.u0);
                         var v = this.pos.minus(this.prevPos);
-                        var offset = v.times(hitTime);//this.velocity.times(hitTime);
-                        this.pos = this.prevPos.plus(offset);// this.pos.minus(offset); //
+                        var offset = v.times(hitTime);
+                        this.pos = this.prevPos.plus(offset);
 
-                        // var overlap = this.pos.minus($tile.center);//this.getTileOverlap($tile);
+                        var overlap = this.pos.minus($tile.center);
                         overlap = new vec2(Math.abs(overlap.x), Math.abs(overlap.y));
 
                         if(overlap.x > overlap.y){
-                            v.x *= 0;
+                            v.x *= -0.5;
                         } else {
-                            v.y *= 0;
+                            v.y *= -0.5;
                         }
-                        this.pos = this.pos.plus(v.times((1.0 - result.u0) * 0.99));
+                        this.pos = this.pos.plus(v.times((1.0 - result.u0) * 0.95));
 
                     }
-
-                    // var overlap = this.getTileOverlap($tile);
-                    // var delta = this.pos.minus($tile.pos);
-                    // if(overlap == null)
-                    //     return;
-                    // if(overlap.x < overlap.y){
-                    //     this.pos.x += overlap.x * sign(delta.x);
-                    // } else {
-                    //     this.pos.y += overlap.y * sign(delta.y);
-                    // }
-
-                    // for(var j = 0; j < 4; j++){
-                    //     if((j == TOP && this.velocity.y < 0) || (j == RIGHT && this.velocity.x > 0) 
-                    //         || (j == BOTTOM && this.velocity.y > 0) || (j == LEFT && this.velocity.x < 0))
-                    //         continue;
-
-                    //     var edge = $tile.getEdge(j);
-                    //     var closePt = findIntersection($pt, $pt.minus(this.velocity), edge.v1, edge.v2);
-                    //     if(closePt){
-                    //         var ev = edge.v2.minus(closePt);
-                    //         var evn = ev.normalize();
-                    //         var ratio = $pt.minus(closePt).dot(evn);
-                    //         var closePt2 = closePt.plus(evn.times(ratio));
-                    //         // var closePt2 = $tile.closestPointOnEdge($pt, edge, this.velocity);
-
-                    //         var delta = $pt.minus(closePt2).times(1.01);
-                    //         this.pos = this.pos.minus(delta);
-                    //         this.velocity = this.pos.minus(this.prevPos);
-                    //         $pt = $pt.minus(delta);
-                    //     } else {
-                    //         // closePt = $tile.closestPointOnEdges($pt, this.velocity);
-                    //         // var delta = $pt.minus(closePt).times(1.01);
-                    //         // this.pos = this.pos.minus(delta);
-                    //         // this.velocity = this.pos.minus(this.prevPos);
-                    //         // $pt = $pt.minus(delta);
-                    //     }
-                    // }
                     break;
             }
         }
@@ -517,19 +514,30 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
 
             //find the possible first and last times
             //of overlap along each axis
+            var set = false;
             for( var i = 0; i < 2; i++ ) {
                 var j = (i == 0) ? "x" : "y";
                 if( A.max(i) < B.min(i) && v[j] < 0 ) {
                     u_0[j] = (A.max(i) - B.min(i)) / v[j];
+                    set = true;
                 } else if( B.max(i) < A.min(i) && v[j] > 0 ) {
                     u_0[j] = (A.min(i) - B.max(i)) / v[j];
+                    set = true;
                 }
 
                 if( B.max(i) > A.min(i) && v[j] < 0 ) {
                     u_1[j] = (A.min(i) - B.max(i)) / v[j];
+                    set = true;
                 } else if( A.max(i) > B.min(i) && v[j] > 0 ) {
                     u_1[j] = (A.max(i) - B.min(i)) / v[j];
+                    set = true;
                 }
+            }
+
+            if(!set){
+                return {collision: false,
+                        u0:0,
+                        u1:1};
             }
 
             //possible first time of overlap
@@ -538,8 +546,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
             //possible last time of overlap
             u1 = Math.min( u_1.x, u_1.y);
 
-            if(u0 < 0 || u0 > 1)// || u1 < 0 || u1 > 1)
-                console.log("u0: " + u0 + "\t\tu1: " + u1);
+            
 
             //they could have only collided if the first time of 
             //overlap occurred before the last time of overlap
@@ -548,6 +555,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
                 u0: u0,
                 u1: u1,
             };
+
+            if(response.collision && (u0 < 0 || u0 > 1 || u1 < 0 || u1 > 1))
+                console.log("u0: " + u0 + "\t\tu1: " + u1);
             return response;
         }
 
@@ -858,6 +868,10 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
                     case "#":
                         context.beginPath();
                         context.strokeRect(tile.pos.x, tile.pos.y, TILE_SIZE, TILE_SIZE);
+                        if(tile.highlite == true){
+                            context.fillRect(tile.pos.x, tile.pos.y, TILE_SIZE, TILE_SIZE);
+                            tile.highlite = false;
+                        }
                         break;
                 }
             }
@@ -958,7 +972,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
                 var bullet = new Bullet(player.pos.x, player.pos.y, bulletVelocity);            
                 bullets.push(bullet);
 
-                player.shotForce = mouseDelta.times(-0.01);
+                player.shotForce = mouseDelta.normalize().times(-1.0);
             } else {
                 player.shotForce = new vec2();
             }
