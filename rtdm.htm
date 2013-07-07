@@ -191,6 +191,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
             this.pos = new vec2($x, $y);
             this.prevPos = new vec2($x, $y);
             this.radius = $radius;
+            this.force = new vec2();
             this.velocity = ($velocity) ? $velocity : new vec2();
             this.heading = ($velocity) ? this.velocity.normalize() : new vec2(1, 0);
             this.alive = true;
@@ -204,19 +205,17 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
         }
         
         Actor.prototype.getSteeringForce = function(){
-            return new vec2();
+            return new vec2(0, 0.1);    //only gravity by default
         }
         
         Actor.prototype.update = function(){
             ++this.aliveFrames;
             var oldPos = this.pos.plus(new vec2());
-            var steeringForce = this.getSteeringForce();//.divide(33.0);
-            var accel = steeringForce.plus(new vec2(0, 0.1));
+            var steeringForce = this.getSteeringForce();
+            var accel = steeringForce;
             var implicitVelocity = this.pos.minus(this.prevPos).plus(accel);
-            var userSetVelocity = this.velocity.minus(implicitVelocity);
-            accel = accel.plus(userSetVelocity).times(0.99);
 
-            this.velocity = implicitVelocity;//.plus(accel);
+            this.velocity = implicitVelocity;//this.velocity.plus(accel);//
             // var speed = this.velocity.length();
             //this.velocity = (speed == 0) ? new vec2() : this.velocity.divide(speed / Math.min(speed, this.maxSpeed));
             
@@ -224,9 +223,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
             
             this.heading = this.velocity.normalize();
 
-            this.checkLevelCollisions(level);
-
             this.prevPos = oldPos;
+
+            this.checkLevelCollisions(level);
         }
 
         Actor.prototype.checkLevelCollisions = function($lvl){
@@ -368,43 +367,51 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
             }
         }
 
-        Actor.prototype.checkLevelCollisions = function($lvl){
+        AxisAlignedActor.prototype.checkLevelCollisions = function($lvl){
+            var minTime = 1.0;
+            var handleSweep = null;
+            var t = null;
             for(var i = 0; i < this.shape.length; i++){
                 var pt = this.pos.plus(this.shape[i]);
                 var tx = parseInt(pt.x / TILE_SIZE);
                 var ty = parseInt(pt.y / TILE_SIZE);
                 if(tx >= 0 && tx < $lvl.width && ty >= 0 && ty < $lvl.height){
                     var tile = $lvl.tiles[ty * $lvl.width + tx];
+                    // if(tile.type == "#"){
+                    //     sweep = this.AABBSweep(tile);
+                    //     if(minTime > sweep.u0 && sweep.collision){
+                    //         handleSweep = sweep;
+                    //         t = tile;
+                    //     }
+                    // }
                     this.handleTileCollision(tile, pt);
                 }
             }
+            // if(handleSweep)
+            //     this.handleTileCollision(t, this.pos, handleSweep);
         }
 
-        AxisAlignedActor.prototype.handleTileCollision = function($tile, $pt){
+        AxisAlignedActor.prototype.handleTileCollision = function($tile, $pt, $sweepResult){
             switch($tile.type){
                 case "#":                        
-                    if(!$tile.isPointInside($pt))
-                       return;
+                    // if(!$tile.isPointInside($pt))
+                    //    return;
 
-                    var result = this.AABBSweep($tile);
-                    if(result.collision && (result.u0 != 0 && result.u1 != 0)){
-                        // if(counter % 20 == 0 && this != player)
-                        //     console.log("u0: " + result.u0 + "\t\tu1: " + result.u1);
-                        var hitTime = (1.0 - result.u0);
-                        var offset = this.velocity.times(hitTime);
-                        this.pos = this.pos.minus(offset);
+                    var result = this.AABBSweep($tile); //$sweepResult;//
+                    if(result.collision){// && (result.u0 != 0 && result.u1 != 0)){
+                        var hitTime = (result.u0);
+                        var offset = (this.pos.minus(this.prevPos)).times(hitTime);//this.velocity.times(hitTime);
+                        this.pos = this.prevPos.plus(offset);// this.pos.minus(offset); //
 
-                        this.velocity = offset;
+                        var overlap = this.pos.minus($tile.center);//this.getTileOverlap($tile);
+                        overlap = new vec2(Math.abs(overlap.x), Math.abs(overlap.y));
 
-                        // var overlap = this.getTileOverlap($tile);
-                        // if(overlap == null)
-                        //     return;
-                        // if(overlap.x < overlap.y){
-                        //     this.velocity.x *= -1;
-                        // } else {
-                        //     this.velocity.y *= -1;
-                        // }
-                        // this.pos = this.pos.plus(this.velocity.times(1.0 - result.u0));
+                        if(overlap.x > overlap.y){
+                            this.velocity.x *= 0;
+                        } else {
+                            this.velocity.y *= 0;
+                        }
+                        this.pos = this.pos.plus(this.velocity.times(1.0 - result.u0));
 
                     }
 
@@ -495,6 +502,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
             if( A.overlaps(B) ){
                 u0 = u1 = 0;
 
+                console.log("overlapping the previous frame.");
                 var response = {
                     collision: u0 <= u1,
                     u0: 0,
@@ -526,9 +534,11 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
             //possible last time of overlap
             u1 = Math.min( u_1.x, u_1.y);
 
-            //they could have only collided if
-            //the first time of overlap occurred
-            //before the last time of overlap
+            if(u0 < 0 || u0 > 1)// || u1 < 0 || u1 > 1)
+                console.log("u0: " + u0 + "\t\tu1: " + u1);
+
+            //they could have only collided if the first time of 
+            //overlap occurred before the last time of overlap
             var response = {
                 collision: u0 <= u1,
                 u0: u0,
@@ -611,13 +621,20 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
             context.closePath();
             context.stroke();
         }
-        
 
         
         Player.prototype = new AxisAlignedActor();
         Player.prototype.constructor = Player;
         function Player($x, $y){
-            AxisAlignedActor.call(this, $x, $y, new vec2(1,0), 10);
+            AxisAlignedActor.call(this, $x, $y, new vec2(1, 0), 10);
+            this.maxSpeed = 0.35;
+        }
+
+        Player.prototype.getSteeringForce = function(){
+            var totalForce = keyboardVec;
+            if(this.shotForce)
+                totalForce = totalForce.plus(this.shotForce);
+            return Actor.prototype.getSteeringForce.call().plus(totalForce);
         }
         
         Player.prototype.update = function(){
@@ -923,26 +940,25 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
             }
                 
             if(keyboardVec.lengthSquared() > 0){
-                keyboardVec = keyboardVec.normalize().times(0.25);
+                keyboardVec = keyboardVec.times(0.11);
             }
-            player.prevPos = player.prevPos.minus(keyboardVec);
         }
         
         function runLoop(){
             //remove everything that we drew out previous frame from the screen
             context.clearRect(0, 0, WIDTH, HEIGHT);
-            player.pos = player.pos.plus(keyboardVec);
             if(mouseDown && counter % 10 == 0){
                 var mouseDelta = mousePosition.minus(player.pos);
                 var bulletVelocity = mouseDelta.normalize().times(20).plus(keyboardVec);
                 
                 var bullet = new Bullet(player.pos.x, player.pos.y, bulletVelocity);            
                 bullets.push(bullet);
+
+                player.shotForce = mouseDelta.times(-0.01);
+            } else {
+                player.shotForce = new vec2();
             }
-            
-            // if(actors.length < 10 && counter % 50 == 0)
-            //     spawnActor();
-            
+
             for(var i = 0; i < bullets.length; i++){
                 var b = bullets[i];
                 b.update();
