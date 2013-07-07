@@ -199,7 +199,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
             
             
             this.maxTurnRate = 0.1;
-            this.maxSpeed = 7.5;
+            this.maxSpeed = 17.5;
             
             this.smartFleePts = [];
         }
@@ -216,8 +216,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
             var implicitVelocity = this.pos.minus(this.prevPos).plus(accel);
 
             this.velocity = implicitVelocity;//this.velocity.plus(accel);//
-            // var speed = this.velocity.length();
-            //this.velocity = (speed == 0) ? new vec2() : this.velocity.divide(speed / Math.min(speed, this.maxSpeed));
+            var speed = this.velocity.length();
+            this.velocity = (speed == 0) ? new vec2() : this.velocity.divide(speed / Math.min(speed, this.maxSpeed));
             
             this.pos = this.pos.plus(this.velocity);
             
@@ -384,6 +384,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
                     //         t = tile;
                     //     }
                     // }
+                    
                     this.handleTileCollision(tile, pt);
                 }
             }
@@ -398,20 +399,24 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
                     //    return;
 
                     var result = this.AABBSweep($tile); //$sweepResult;//
+                    // var result = $sweepResult;//
                     if(result.collision){// && (result.u0 != 0 && result.u1 != 0)){
+                        var overlap = this.pos.minus($tile.center);
+
                         var hitTime = (result.u0);
-                        var offset = (this.pos.minus(this.prevPos)).times(hitTime);//this.velocity.times(hitTime);
+                        var v = this.pos.minus(this.prevPos);
+                        var offset = v.times(hitTime);//this.velocity.times(hitTime);
                         this.pos = this.prevPos.plus(offset);// this.pos.minus(offset); //
 
-                        var overlap = this.pos.minus($tile.center);//this.getTileOverlap($tile);
+                        // var overlap = this.pos.minus($tile.center);//this.getTileOverlap($tile);
                         overlap = new vec2(Math.abs(overlap.x), Math.abs(overlap.y));
 
                         if(overlap.x > overlap.y){
-                            this.velocity.x *= 0;
+                            v.x *= 0;
                         } else {
-                            this.velocity.y *= 0;
+                            v.y *= 0;
                         }
-                        this.pos = this.pos.plus(this.velocity.times(1.0 - result.u0));
+                        this.pos = this.pos.plus(v.times((1.0 - result.u0) * 0.99));
 
                     }
 
@@ -502,7 +507,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
             if( A.overlaps(B) ){
                 u0 = u1 = 0;
 
-                console.log("overlapping the previous frame.");
                 var response = {
                     collision: u0 <= u1,
                     u0: 0,
@@ -627,7 +631,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
         Player.prototype.constructor = Player;
         function Player($x, $y){
             AxisAlignedActor.call(this, $x, $y, new vec2(1, 0), 10);
-            this.maxSpeed = 0.35;
+            this.maxSpeed = 5.35;
         }
 
         Player.prototype.getSteeringForce = function(){
