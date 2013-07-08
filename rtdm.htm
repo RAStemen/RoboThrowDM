@@ -54,10 +54,10 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
                             "#............#..............#..........#\n" +
                             "#.......######........#.....#..........#\n" +
                             "#.....................##########.......#\n" +
-                            "#....................................###\n" +
-                            "#..................................#####\n" +
+                            "#...................................####\n" +
+                            "#...................................####\n" +
                             "#...........P....................#######\n" +
-                            "#.............................##########\n" +
+                            "#................................#######\n" +
                             "########################################\n";
         
         window.onload = init;
@@ -197,7 +197,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
             this.alive = true;
             this.aliveFrames = 0;
             
-            
+            this.COR = 0.5;     //coefficient of restitution
+            this.friction = 0.95;
+
             this.maxTurnRate = 0.1;
             this.maxSpeed = 17.5;
             
@@ -367,6 +369,12 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
             }
         }
 
+        AxisAlignedActor.prototype.update = function(){
+            
+            Actor.prototype.update.call(this);
+            this.isOnGround = false;
+        }
+
         AxisAlignedActor.prototype.checkLevelCollisions = function($lvl){
             //figure out the order to check tile collisions
             // var pt = this.pos;
@@ -406,12 +414,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
             // }
 
 
-
-
-            var minTime = 1.0;
-            var handleSweep = null;
-            var t = null;
-
+            this.isOnGround = false;
             var val = this.velocity.x > 0;
             var start = val ? this.shape.length - 1 : 0;
             var end = val ? -1 : this.shape.length;
@@ -435,8 +438,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
                     if(result.collision){
                         var overlap = new vec2();
 
-                        $tile.highlite = true;
-
                         var hitTime = (result.u0);
                         var v = this.pos.minus(this.prevPos);
                         var offset = v.times(hitTime);
@@ -446,12 +447,12 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
                         overlap = new vec2(Math.abs(overlap.x), Math.abs(overlap.y));
 
                         if(overlap.x > overlap.y){
-                            v.x *= -0.5;
+                            v.x *= -this.COR;
                         } else {
-                            v.y *= -0.5;
+                            v.y *= -this.COR;
                         }
-                        this.pos = this.pos.plus(v.times((1.0 - result.u0) * 0.95));
-
+                        this.pos = this.pos.plus(v.times((1.0 - result.u0) * this.friction));
+                        this.isOnGround = true;
                     }
                     break;
             }
@@ -642,10 +643,17 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
         function Player($x, $y){
             AxisAlignedActor.call(this, $x, $y, new vec2(1, 0), 10);
             this.maxSpeed = 5.35;
+            this.COR = 0.1;
+            this.friction = 0.9;
         }
 
         Player.prototype.getSteeringForce = function(){
             var totalForce = keyboardVec;
+            if(!this.isOnGround){
+                if(keyboardVec.y != 0)
+                    totalForce.y = 0;
+                totalForce.x *= 0.6;
+            }
             if(this.shotForce)
                 totalForce = totalForce.plus(this.shotForce);
             return Actor.prototype.getSteeringForce.call().plus(totalForce);
@@ -662,6 +670,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
             AxisAlignedActor.call(this, $x, $y, $velocity, 3);
             this.prevPos = this.pos.minus($velocity);
             this.stoppedFrames = 0;
+            this.COR = 0.7;
         }
         
         Bullet.prototype.isOffScreen = function(){
@@ -868,10 +877,10 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
                     case "#":
                         context.beginPath();
                         context.strokeRect(tile.pos.x, tile.pos.y, TILE_SIZE, TILE_SIZE);
-                        if(tile.highlite == true){
-                            context.fillRect(tile.pos.x, tile.pos.y, TILE_SIZE, TILE_SIZE);
-                            tile.highlite = false;
-                        }
+                        // if(tile.highlite == true){
+                        //     context.fillRect(tile.pos.x, tile.pos.y, TILE_SIZE, TILE_SIZE);
+                        //     tile.highlite = false;
+                        // }
                         break;
                 }
             }
@@ -895,10 +904,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
             var playerLoc = level.getPlayerSpawn();
             player = new Player(playerLoc.x, playerLoc.y);//(center.x, center.y);
             
-            var loc = new vec2(0, 0);
-            // for(var i = 0; i < 10; i++){
-            //     spawnActor();
-            // }
             
             runLoop();
         }
@@ -952,13 +957,14 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
             if(keyboardState['D']){
                 keyboardVec.x += 1;
             }
-            if(keyboardState[' ']){
-                // player.prevPos = player.prevPos.minus(new vec2(0, -6));
-                keyboardVec.y -= 1;
-            }
-                
+
             if(keyboardVec.lengthSquared() > 0){
-                keyboardVec = keyboardVec.times(0.11);
+                keyboardVec = keyboardVec.times(0.3);
+            }
+
+            //handle the jump after the normalize
+            if(keyboardState[' ']){
+                    keyboardVec.y -= 10;
             }
         }
         
@@ -967,7 +973,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
             context.clearRect(0, 0, WIDTH, HEIGHT);
             if(mouseDown && counter % 10 == 0){
                 var mouseDelta = mousePosition.minus(player.pos);
-                var bulletVelocity = mouseDelta.normalize().times(20).plus(keyboardVec);
+                var bulletVelocity = mouseDelta.normalize().times(9).plus(keyboardVec);
                 
                 var bullet = new Bullet(player.pos.x, player.pos.y, bulletVelocity);            
                 bullets.push(bullet);
