@@ -1,0 +1,99 @@
+<!--Copyright (c) 2013 Ryan Stemen
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.-->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Robo Throw DM</title>
+    <script type="text/javascript"><!--
+        const WIDTH = 1280;
+        const HEIGHT = 720;
+        const TILE_SIZE = 24;
+
+        var root1;
+        var counter = 0;
+
+        window.onload = init;
+
+
+        function Node(value){
+            this.value = value;
+            this.left = null;
+            this.right = null;
+        }
+
+
+        function init(){
+            root1 = new Node(10);
+            var n6 = root1.left = new Node(6);
+            var n15 = root1.right = new Node(15);
+            var n4 = n6.left = new Node(4);
+            n4.left = new Node(1);
+            n4.right = new Node(5);
+
+            n15.left = new Node(11);
+            var n19 = n15.right = new Node(19);
+            n19.left = new Node(18);
+            n19.right = new Node(24);
+
+            var desiredNode = nthSmallestElement(root1, 3);
+            console.log("FOUND ELEMENT: " + desiredNode.value);
+        }
+
+        function nthSmallestElement(root, n){
+            currIndex = 0
+            return recurse(root, n);
+        }
+
+        var currIndex = 0;
+        function recurse(currNode, nth){
+            if(currNode.left){
+                var result = recurse(currNode.left, nth);
+                if(result != null)
+                    return result;
+            }
+            
+            currIndex++;
+            if(currIndex == nth){
+                return currNode;
+            }
+
+            if(currNode.right){
+                var result = recurse(currNode.right, nth);
+                if(result != null)
+                    return result;
+            }
+
+            return null;
+        }
+        
+        
+        function runLoop(){
+           
+            counter += 1;
+            window.setTimeout(runLoop, 15);
+        }
+        
+        
+    </script>
+</head>
+<body>
+    <canvas id="c" width="1280px" height="720px">Canvas not supported!</canvas>
+</body>
+</html>
